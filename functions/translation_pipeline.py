@@ -79,49 +79,47 @@ def process_file(
             original = text
             text = text.strip()
             lower_text = text.lower()
-            normalized = ' '.join(lower_text.split())
+            matched = False
 
-            if normalized in SKIP_PHRASES:
-                log(f"⏭️ Skipped: '{original}'")
+            normalized_text = ' '.join(lower_text.split())  # Normalize whitespace
+            if normalized_text in SKIP_PHRASES:
+                log(f"⏭️ Skipped (excluded phrase): '{original}'")
                 final_texts.append(original)
                 continue
 
-            # Check for exact match
+
             if lower_text in glossary_map:
                 replacement = glossary_map[lower_text]
-                log(f"📕 Glossary exact: '{original}' → '{replacement}'")
+                log(f"📕 Trovata nel glossario: '{original}' → '{replacement}'")
                 final_texts.append(replacement)
-                continue
+                matched = True
 
-            # Build a list of placeholders
-            glossary_placeholders = {}
-            temp_text = original
-            matched = False
+            if not matched:
+                best_match = None
+                best_replacement = None
+                for phrase, replacement in glossary_map.items():
+                    if phrase in lower_text:
+                        if best_match is None or len(phrase) > len(best_match):
+                            best_match = phrase
+                            best_replacement = replacement
 
-            for phrase, replacement in sorted(glossary_map.items(), key=lambda x: len(x[0]), reverse=True):
-                if phrase in lower_text:
-                    placeholder = f"__GLOSSARY_TERM_{len(glossary_placeholders)}__"
-                    pattern = re.compile(rf'\b{re.escape(phrase)}\b', re.IGNORECASE)
-                    if pattern.search(temp_text):
-                        temp_text = pattern.sub(placeholder, temp_text)
-                        glossary_placeholders[placeholder] = replacement
-                        matched = True
-
-            if matched:
-                log(f"📙 Glossary placeholders used: {glossary_placeholders}")
-                translated = translate_text_list([temp_text], source_lang, target_lang, log=log)
-                # Replace placeholders with glossary translations
-                restored = translated[0]
-                for placeholder, replacement in glossary_placeholders.items():
-                    restored = restored.replace(placeholder, replacement)
-                final_texts.append(restored)
-                log(f"📙 Final after reinserting glossary terms: '{original}' → '{restored}'")
-                continue
+                if best_match:
+                    log(f"📙 Partial glossary context: using '{best_match}' ➜ '{best_replacement}' as context for '{original}'")
+                    translated = translate_text_list(
+                        [original],
+                        source_lang,
+                        target_lang,
+                        glossary_id=None,
+                        log=log,
+                        context=best_match  # 🧠 new
+                    )
+                    final_texts.append(translated[0])
+                    matched = True
 
 
-
-            translated = translate_text_list([original], source_lang, target_lang, log=log)
-            final_texts.append(translated[0])
+            if not matched:
+                translated = translate_text_list([original], source_lang, target_lang, log=log)
+                final_texts.append(translated[0])
 
         replace_translated_texts(text_entities, final_texts, log)
         translated_dxf_path = os.path.join(dxf_folder, f"{original_name}_{target_lang}.dxf")

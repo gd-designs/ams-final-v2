@@ -10,6 +10,8 @@ import shutil
 from workers.tr_worker import TranslationWorker
 from ui.translate_details import TranslateDetailsDialog
 from functions.file_utils import ensure_translated_folder
+from functions.glossary_utils import parse_glossary_to_map
+from ui.translation_log_dialog import TranslationLogDialog
 from datetime import datetime
 from functools import partial
 
@@ -416,37 +418,53 @@ class HomePage(QWidget):
             return
 
         dialog = TranslateDetailsDialog(self)
-        if dialog.exec() == QDialog.Accepted:
-            details = dialog.get_details()
-            print(details)
+        if dialog.exec() != QDialog.Accepted:
+            return
 
+        details = dialog.get_details()
+        print(details)
 
         self.source_lang = details["source_lang"]
         self.target_lang = details["target_lang"]
         self.output_dir = details["output_folder"]
-        self.glossary_map = {}  # Load from file if needed
+        glossary_path = details.get("glossary_path")
+
+        try:
+            if glossary_path:
+                self.glossary_map = parse_glossary_to_map(
+                    glossary_path,
+                    self.source_lang,
+                    self.target_lang
+                )
+            else:
+                self.glossary_map = {}
+        except Exception as e:
+            QMessageBox.warning(self, "Glossary Error", str(e))
+            self.glossary_map = {}
 
         self.active_workers = []
 
-        queue_dir = os.path.abspath("queue")
+        # ✅ Create and show log dialog
+        self.log_dialog = TranslationLogDialog(self)
+        self.log_dialog.show()
+
+        def log_output(msg):
+            print(msg)
+            self.log_dialog.append_log(msg)
 
         for file_path in self.selected_files:
-            abs_path = (
-                file_path if os.path.isabs(file_path)
-                else os.path.abspath(file_path)
-            )
-
-            print(f"🔹 Processing absolute path: {abs_path}")  # Optional debug log
+            abs_path = os.path.abspath(file_path)
 
             worker = TranslationWorker(
-                file_path,
+                abs_path,
                 self.source_lang,
                 self.target_lang,
                 self.glossary_map,
                 self.output_dir
             )
 
-            worker.log_signal.connect(lambda msg: print(msg))  # Replace with UI log method if needed
+            worker.log_signal.connect(log_output)
+            worker.finished.connect(lambda path: self.log_dialog.mark_finished())
             worker.finished.connect(partial(self.on_translation_finished, lang=self.target_lang))
             worker.finished.connect(lambda path: print(f"✅ Done: {path}"))
             worker.failed.connect(lambda path, err: print(f"❌ Failed: {path} - {err}"))
