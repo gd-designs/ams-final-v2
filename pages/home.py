@@ -14,7 +14,15 @@ from functions.glossary_utils import parse_glossary_to_map
 from ui.translation_log_dialog import TranslationLogDialog
 from datetime import datetime
 from functools import partial
+from functions.paths import resource_path, get_glossary_dir, queue_dir, translated_dir
+from pathlib import Path
+import logging
 
+logger = logging.getLogger(__name__)
+
+def default_glossary_path() -> Path | None:
+    gpath = get_glossary_dir() / "glossario_tecnico.csv"
+    return gpath if gpath.exists() else None
 
 class HomePage(QWidget):
     def __init__(self, parent=None):
@@ -28,10 +36,10 @@ class HomePage(QWidget):
 
         # File queue label
         icon_label = QLabel()
-        icon_label.setPixmap(QIcon("assets/icons/IconoirMultiplePages.svg").pixmap(20, 20))
+        icon_label.setPixmap(QIcon(resource_path("assets/icons/IconoirMultiplePages.svg")).pixmap(20, 20))
         icon_label.setAlignment(Qt.AlignVCenter)
 
-        text_label = QLabel("File Queue")
+        text_label = QLabel("Coda file")
         text_label.setStyleSheet("font-weight: bold; font-size: 16px; color: white;")
 
         left_container = QWidget()
@@ -43,13 +51,13 @@ class HomePage(QWidget):
         left_layout.addWidget(text_label)
 
         # ➡️ Right: Add + Remove Buttons
-        file_drop_btn = QPushButton("  Add DWG Files")
-        file_drop_btn.setIcon(QIcon("assets/icons/IconoirAddCircledOutline.svg"))
+        file_drop_btn = QPushButton("  Aggiungi file DWG")
+        file_drop_btn.setIcon(QIcon(resource_path("assets/icons/IconoirAddCircledOutline.svg")))
         file_drop_btn.setIconSize(QSize(20, 20))
         file_drop_btn.clicked.connect(self.open_file_dialog)
 
-        self.remove_all_btn = QPushButton("  Remove All")
-        self.remove_all_btn.setIcon(QIcon("assets/icons/IconoirTrash.svg"))
+        self.remove_all_btn = QPushButton("  Rimuovi tutto")
+        self.remove_all_btn.setIcon(QIcon(resource_path("assets/icons/IconoirTrash.svg")))
         self.remove_all_btn.setIconSize(QSize(20, 20))
         self.remove_all_btn.clicked.connect(self.remove_all_files)
         self.remove_all_btn.setVisible(False)
@@ -83,12 +91,12 @@ class HomePage(QWidget):
         self.table.setHorizontalHeaderItem(0, header_checkbox)
 
         # Column 1: Filename (right aligned)
-        header_filename = QTableWidgetItem("Filename")
+        header_filename = QTableWidgetItem("Nome file")
         header_filename.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
         self.table.setHorizontalHeaderItem(1, header_filename)
 
         # Column 2: Actions (right aligned)
-        header_actions = QTableWidgetItem("Actions")
+        header_actions = QTableWidgetItem("Azioni")
         header_actions.setTextAlignment(Qt.AlignCenter | Qt.AlignVCenter)
         self.table.setHorizontalHeaderItem(2, header_actions)
 
@@ -109,18 +117,18 @@ class HomePage(QWidget):
         actions_layout.setSpacing(15)
         actions_layout.setAlignment(Qt.AlignLeft)
 
-        translate_all_btn = QPushButton("  Translate All")
-        translate_all_btn.setIcon(QIcon("assets/icons/IconoirTranslate.svg"))
+        translate_all_btn = QPushButton("  Traduci tutto")
+        translate_all_btn.setIcon(QIcon(resource_path("assets/icons/IconoirTranslate.svg")))
         translate_all_btn.setIconSize(QSize(20, 20))
         translate_all_btn.clicked.connect(self.start_translation)
 
-        check_all_btn = QPushButton("  Check All")
-        check_all_btn.setIcon(QIcon("assets/icons/IconoirPageSearch.svg"))
+        check_all_btn = QPushButton("  Controlla tutto")
+        check_all_btn.setIcon(QIcon(resource_path("assets/icons/IconoirPageSearch.svg")))
         check_all_btn.setIconSize(QSize(20, 20))
         check_all_btn.clicked.connect(self.check_all)
 
-        convert_all_btn = QPushButton("  Convert All")
-        convert_all_btn.setIcon(QIcon("assets/icons/IconoirRepeat.svg"))
+        convert_all_btn = QPushButton("  Converti tutto")
+        convert_all_btn.setIcon(QIcon(resource_path("assets/icons/IconoirRepeat.svg")))
         convert_all_btn.setIconSize(QSize(20, 20))
         convert_all_btn.clicked.connect(self.convert_all)
 
@@ -147,11 +155,11 @@ class HomePage(QWidget):
             layout.addWidget(label)
 
             table = QTableWidget(0, 3)
-            table.setHorizontalHeaderLabels(["Filename", "Timestamp", "Actions"])
+            table.setHorizontalHeaderLabels(["Nome file", "Timestamp", "Azioni"])
 
 
             # Align both headers to left
-            filename_header = QTableWidgetItem("Filename")
+            filename_header = QTableWidgetItem("Nome file")
             filename_header.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
             table.setHorizontalHeaderItem(0, filename_header)
 
@@ -159,7 +167,7 @@ class HomePage(QWidget):
             timestamp_header.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
             table.setHorizontalHeaderItem(1, timestamp_header)
 
-            actions_header = QTableWidgetItem("Actions")
+            actions_header = QTableWidgetItem("Azioni")
             actions_header.setTextAlignment(Qt.AlignCenter | Qt.AlignVCenter)
             table.setHorizontalHeaderItem(2, actions_header)
             table.setColumnWidth(2, 60)
@@ -176,9 +184,9 @@ class HomePage(QWidget):
             return wrapper, table
 
 
-        translated_widget, self.translated_table = create_log_table("Recently Translated")
-        checked_widget, self.checked_table = create_log_table("Recently Checked")
-        converted_widget, self.converted_table = create_log_table("Recently Converted")
+        translated_widget, self.translated_table = create_log_table("Recentemente Tradotto")
+        checked_widget, self.checked_table = create_log_table("Recentemente Controllato")
+        converted_widget, self.converted_table = create_log_table("Recentemente Convertito")
 
         recent_layout.addWidget(translated_widget, 0, 0)
         recent_layout.addWidget(checked_widget, 0, 1)
@@ -197,23 +205,25 @@ class HomePage(QWidget):
         for file in files:
             self.add_file_to_queue(file)
 
-    def add_file_to_queue(self, filepath):
-        queue_dir = os.path.abspath("queue")
-        os.makedirs(queue_dir, exist_ok=True)
+    def add_file_to_queue(self, filepath: str):
+        qdir = queue_dir()                             # ➋
+        filename   = os.path.basename(filepath)
+        queue_path = qdir / filename                   # pathlib.Path
 
-        filename = os.path.basename(filepath)
-        queue_path = os.path.join(queue_dir, filename)
-
-        # Copy file only if not already in queue
-        if not os.path.exists(queue_path):
+        if not queue_path.exists():                    # copy only once
             try:
                 shutil.copy2(filepath, queue_path)
-            except Exception as e:
-                print(f"❌ Failed to copy {filepath}: {e}")
+            except OSError as err:
+                logger.error(f"copy failed: {err}")
                 return
 
         row = self.table.rowCount()
         self.table.insertRow(row)
+
+        # store the ABSOLUTE path in the table (so we never rebuild it later)
+        fn_item = QTableWidgetItem(filename)
+        fn_item.setData(Qt.UserRole, str(queue_path))  # ➌
+        self.table.setItem(row, 1, fn_item)
 
         # Column 0: Checkbox
         checkbox = QCheckBox()
@@ -232,31 +242,27 @@ class HomePage(QWidget):
 
         # Column 2: Menu Icon
         icon_label = QLabel()
-        icon_label.setPixmap(QIcon("assets/icons/IconoirMenu.svg").pixmap(20, 20))
+        icon_label.setPixmap(QIcon(resource_path("assets/icons/IconoirMenu.svg")).pixmap(20, 20))
         icon_label.setAlignment(Qt.AlignCenter | Qt.AlignVCenter)
         self.table.setCellWidget(row, 2, icon_label)
 
 
+    # LOAD existing queue
     def load_existing_files(self):
-        queue_dir = "queue"
-        if not os.path.exists(queue_dir):
-            os.makedirs(queue_dir)
+        for fp in queue_dir().glob("*.dwg"):
+            self.add_file_to_queue(str(fp))
 
-        for filename in os.listdir(queue_dir):
-            file_path = os.path.join(queue_dir, filename)
-            if os.path.isfile(file_path) and filename.lower().endswith(".dwg"):
-                self.add_file_to_queue(file_path)
 
+    # REMOVE ALL
     def remove_all_files(self):
-        queue_dir = "queue"
         for row in reversed(range(self.table.rowCount())):
-            filepath_item = self.table.item(row, 1)
-            if filepath_item:
-                try:
-                    os.remove(os.path.join(queue_dir, filepath_item.text()))
-                except Exception as e:
-                    print(f"⚠️ Could not delete file: {e}")
+            path = Path(self.table.item(row, 1).data(Qt.UserRole))
+            try:
+                path.unlink()
+            except OSError as err:
+                logger.warning(f"delete failed: {err}")
             self.table.removeRow(row)
+
 
     def update_remove_all_visibility(self):
         for row in range(self.table.rowCount()):
@@ -286,11 +292,11 @@ class HomePage(QWidget):
 
     def show_file_menu(self, row):
         menu = QMenu()
-        menu.addAction("Translate", lambda: self.handle_action("translate", self.get_filepath_from_row(row)))
-        menu.addAction("Check Linguistic Integrity", lambda: self.handle_action("check_linguistic_integrity", self.get_filepath_from_row(row)))
-        menu.addAction("Convert File", lambda: self.handle_action("convert", self.get_filepath_from_row(row)))
+        menu.addAction("Traduci", lambda: self.handle_action("translate", self.get_filepath_from_row(row)))
+        menu.addAction("Controlla Integrità Linguistica", lambda: self.handle_action("check_linguistic_integrity", self.get_filepath_from_row(row)))
+        menu.addAction("Converti File", lambda: self.handle_action("convert", self.get_filepath_from_row(row)))
         menu.addSeparator()
-        menu.addAction("Remove from Queue", lambda: self.delete_file_and_row(row))
+        menu.addAction("Rimuovi dalla Coda", lambda: self.delete_file_and_row(row))
 
         menu.setStyleSheet("""
             QMenu {
@@ -322,22 +328,22 @@ class HomePage(QWidget):
 
     def get_filepath_from_row(self, row):
         item = self.table.item(row, 1)
-        return item.text() if item else None
+        return item.data(Qt.UserRole) if item else None
 
-    def delete_file_and_row(self, row):
-        filepath_item = self.table.item(row, 1)
-        if filepath_item:
-            try:
-                os.remove(os.path.join("queue", filepath_item.text()))
-            except Exception as e:
-                print(f"⚠️ Could not delete file: {e}")
+    # ───────────────────────────── delete_file_and_row ─────────────────────────
+    def delete_file_and_row(self, row: int):
+        path = self.table.item(row, 1).data(Qt.UserRole)
+        try:
+            os.remove(path)
+        except OSError as err:
+            logger.warning(f"delete failed: {err}")
         self.table.removeRow(row)
+
 
     def handle_action(self, action_type, file_path):
         if action_type == "translate":
-            self.selected_files = [os.path.join("queue", file_path)]
+            self.selected_files = [file_path]
             self.start_translation()
-        # other actions...
 
 
     def translate_all(self):
@@ -357,128 +363,78 @@ class HomePage(QWidget):
             path = self.get_filepath_from_row(row)
             if path:
                 self.handle_action("convert", path)
-
-    def get_selected_files(self):
-        selected = []
+    # ───────────────────────────── get_selected_files ──────────────────────────
+    def get_selected_files(self) -> list[str]:
+        selected: list[str] = []
         for row in range(self.table.rowCount()):
-            checkbox_widget = self.table.cellWidget(row, 0)
-            if checkbox_widget:
-                checkbox = checkbox_widget.findChild(QCheckBox)
-                if checkbox and checkbox.isChecked():
-                    filename_item = self.table.item(row, 1)
-                    if filename_item:
-                        filepath = os.path.join("queue", filename_item.text())
-                        selected.append(filepath)
+            box = self.table.cellWidget(row, 0).findChild(QCheckBox)
+            if box.isChecked():
+                selected.append(self.table.item(row, 1).data(Qt.UserRole))   # ➎
         return selected
-        
-    def load_recently_translated_files(self):
-        self.translated_table.setRowCount(0)  # Clear existing rows
 
-        translated_dir = ensure_translated_folder()
-        for lang_folder in sorted(os.listdir(translated_dir)):
-            lang_path = os.path.join(translated_dir, lang_folder)
-            if os.path.isdir(lang_path):
-                for file in sorted(os.listdir(lang_path), reverse=True):
-                    if file.lower().endswith(".dwg"):
-                        full_path = os.path.join(lang_path, file)
+            
+    # ─────────────────────────────────────────────────────────────
+    # 2. load_recently_translated_files
+    # ─────────────────────────────────────────────────────────────
+    def load_recently_translated_files(self) -> None:
+        """
+        Rebuilds the “Recentemente Tradotto” table from the Desktop folder.
+        """
 
-                        row = self.translated_table.rowCount()
-                        self.translated_table.insertRow(row)
-
-                        # Column 0: Filename
-                        file_item = QTableWidgetItem(file)
-                        file_item.setData(Qt.UserRole, full_path)
-                        self.translated_table.setItem(row, 0, file_item)
-
-                        # Column 1: Timestamp (use last modified time)
-                        timestamp = os.path.getmtime(full_path)
-                        from datetime import datetime
-                        formatted_time = datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M")
-                        timestamp_item = QTableWidgetItem(formatted_time)
-                        self.translated_table.setItem(row, 1, timestamp_item)
-
-                        # Column 2: Menu Icon
-                        icon_label = QLabel()
-                        icon_label.setPixmap(QIcon("assets/icons/IconoirMenu.svg").pixmap(20, 20))
-                        icon_label.setAlignment(Qt.AlignCenter | Qt.AlignVCenter)
-                        self.translated_table.setCellWidget(row, 2, icon_label)
-
-                        # Connect menu click
-                        icon_label.mousePressEvent = lambda event, row=row, path=full_path: self.show_translated_file_menu(event, row, path)
-
-
-    def on_translation_finished(self, path, lang):
-        self.load_recently_translated_files()
-
-    def start_translation(self):
-        self.selected_files = self.get_selected_files()
-
-        if not self.selected_files:
-            QMessageBox.warning(self, "No Files", "Please select DWG files to translate.")
+        self.translated_table.setRowCount(0)
+        root = translated_dir()
+        if not root.exists():
             return
 
-        dialog = TranslateDetailsDialog(self)
-        if dialog.exec() != QDialog.Accepted:
-            return
+        # newest first
+        for dwg in sorted(root.glob("*.dwg"),
+                        key=lambda p: p.stat().st_mtime,
+                        reverse=True):
+            row = self.translated_table.rowCount()
+            self.translated_table.insertRow(row)
 
-        details = dialog.get_details()
-        print(details)
+            # col 0 – nome file
+            item = QTableWidgetItem(dwg.name)
+            item.setData(Qt.UserRole, str(dwg))
+            self.translated_table.setItem(row, 0, item)
 
-        self.source_lang = details["source_lang"]
-        self.target_lang = details["target_lang"]
-        self.output_dir = details["output_folder"]
-        glossary_path = details.get("glossary_path")
+            # col 1 – timestamp
+            ts = datetime.fromtimestamp(dwg.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
+            self.translated_table.setItem(row, 1, QTableWidgetItem(ts))
 
-        try:
-            if glossary_path:
-                self.glossary_map = parse_glossary_to_map(
-                    glossary_path,
-                    self.source_lang,
-                    self.target_lang
-                )
-            else:
-                self.glossary_map = {}
-        except Exception as e:
-            QMessageBox.warning(self, "Glossary Error", str(e))
-            self.glossary_map = {}
+            # col 2 – menu icona
+            icon_label = QLabel()
+            icon_label.setPixmap(QIcon(resource_path("assets/icons/IconoirMenu.svg")).pixmap(20, 20))
+            icon_label.setAlignment(Qt.AlignCenter | Qt.AlignVCenter)
+            self.translated_table.setCellWidget(row, 2, icon_label)
 
-        self.active_workers = []
-
-        # ✅ Create and show log dialog
-        self.log_dialog = TranslationLogDialog(self)
-        self.log_dialog.show()
-
-        def log_output(msg):
-            print(msg)
-            self.log_dialog.append_log(msg)
-
-        for file_path in self.selected_files:
-            abs_path = os.path.abspath(file_path)
-
-            worker = TranslationWorker(
-                abs_path,
-                self.source_lang,
-                self.target_lang,
-                self.glossary_map,
-                self.output_dir
+            # contextual menu
+            icon_label.mousePressEvent = (
+                lambda ev, r=row, p=str(dwg): self.show_translated_file_menu(ev, r, p)
             )
 
-            worker.log_signal.connect(log_output)
-            worker.finished.connect(lambda path: self.log_dialog.mark_finished())
-            worker.finished.connect(partial(self.on_translation_finished, lang=self.target_lang))
-            worker.finished.connect(lambda path: print(f"✅ Done: {path}"))
-            worker.failed.connect(lambda path, err: print(f"❌ Failed: {path} - {err}"))
 
-            self.active_workers.append(worker)
-            worker.start()
+
+    def on_translation_finished(self, file_path: str) -> None:
+        """
+        • Assumes DWG is already saved in AMS-Applicazione-Tradotto
+        • Refreshes the “Recentemente Tradotto” table
+        """
+
+        logger.info(f"✅ Traduzione completata: {file_path}")
+        self.log_dialog.append_log(f"✅ Traduzione completata: {file_path}")
+
+        self.load_recently_translated_files()  # ← that's all you need now
+
+
 
     def show_translated_file_menu(self, event, row, file_path):
         menu = QMenu()
-        menu.addAction("Open File", lambda: os.startfile(file_path))
-        menu.addAction("Check Linguistic Integrity", lambda: self.check_linguistic_integrity(file_path))
-        menu.addAction("Show in Folder", lambda: os.startfile(os.path.dirname(file_path)))
+        menu.addAction("Apri", lambda: os.startfile(file_path))
+        menu.addAction("Controlla Integrità Linguistica", lambda: self.check_linguistic_integrity(file_path))
+        menu.addAction("Mostra nella Cartella", lambda: os.startfile(os.path.dirname(file_path)))
         menu.addSeparator()
-        menu.addAction("Delete", lambda: self.delete_translated_file(row, file_path))
+        menu.addAction("Elimina", lambda: self.delete_translated_file(row, file_path))
 
         menu.setStyleSheet("""
             QMenu {
@@ -511,4 +467,60 @@ class HomePage(QWidget):
             os.remove(file_path)
             self.translated_table.removeRow(row)
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Could not delete file:\n{e}")
+            QMessageBox.critical(self, "Errore", f"Impossibile eliminare il file:\n{e}")
+
+    def start_translation(self):
+        self.selected_files = self.get_selected_files()
+        if not self.selected_files:
+            QMessageBox.warning(self, "Nessun file", "Seleziona file DWG da tradurre.")
+            return
+
+        dialog = TranslateDetailsDialog(self)
+        if dialog.exec() != QDialog.Accepted:
+            return
+
+        details = dialog.get_details()
+        logger.info(f"Starting translation with details: {details}")
+
+        # Load glossary
+        glossary_map = {}
+        if details["glossary_path"] and os.path.exists(details["glossary_path"]):
+            try:
+                glossary_map = parse_glossary_to_map(
+                    details["glossary_path"],
+                    details["source_lang"],
+                    details["target_lang"]
+                )
+                logger.info(f"Loaded glossary with {len(glossary_map)} terms")
+            except Exception as e:
+                logger.error(f"Failed to load glossary: {e}")
+                QMessageBox.warning(self, "Glossary Error", str(e))
+
+        # Setup log window
+        self.log_dialog = TranslationLogDialog(self)
+        self.log_dialog.show()
+
+        def log_message(msg):
+            self.log_dialog.append_log(msg)
+            logger.info(msg)
+
+        # Start workers
+        self.active_workers = []
+        for file_path in self.selected_files:
+            abs_path = Path(file_path).resolve()  # ← ensures absolute full path
+
+            worker = TranslationWorker(
+                abs_path,
+                details["source_lang"],
+                details["target_lang"],
+                glossary_map,
+                details["output_folder"],
+            )
+
+            worker.log_signal.connect(log_message)
+            worker.finished.connect(self.on_translation_finished)
+            worker.failed.connect(lambda p, e: log_message(f"❌ Failed: {p} - {e}"))
+
+            self.active_workers.append(worker)
+            worker.start()
+            log_message(f"🚀 Started translation for: {abs_path.name}\n📁 Full path: {abs_path}")

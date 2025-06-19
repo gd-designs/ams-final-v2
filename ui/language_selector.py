@@ -5,12 +5,12 @@ from PySide6.QtWidgets import (
 class LanguageSelectorDialog(QDialog):
     def __init__(self, available_languages: dict, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Add Language Column")
+        self.setWindowTitle("Aggiungi colonna Lingua")
 
         layout = QVBoxLayout()
         self.setLayout(layout)
 
-        layout.addWidget(QLabel("Select a language to add:"))
+        layout.addWidget(QLabel("Seleziona una lingua da aggiungere:"))
 
         self.dropdown = QComboBox()
         for code, name in available_languages.items():

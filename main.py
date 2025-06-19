@@ -3,19 +3,22 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QFrame
 )
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QAction, QDragEnterEvent, QDropEvent
+from PySide6.QtGui import QAction, QDragEnterEvent, QDropEvent, QIcon
 import os
 import sys
 
 from pages.home import HomePage
 from pages.glossary import GlossaryManagerPage
 
+from functions.paths import resource_path
+
 class MainWindow(QMainWindow):
     files_dropped = Signal(list)  # ✅ signal to send dropped files
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("AMS DWG Translator Tool v2")
+        self.setWindowTitle("AMS Applicazione v2")
+        self.setWindowIcon(QIcon(resource_path("assets/logo/ams-logo-sfondo-blu-32.ico")))
         self.setMinimumSize(1000, 700)
         self.setAcceptDrops(True)
 
@@ -30,10 +33,10 @@ class MainWindow(QMainWindow):
 
         # Add Glossary Page
         self.glossary_widget = GlossaryManagerPage()
-        self.pages["Glossaries"] = self.glossary_widget
+        self.pages["Glossari"] = self.glossary_widget
         self.stack.addWidget(self.glossary_widget)
 
-        for name in ["Logs", "Settings"]:
+        for name in ["Log", "Impostazioni"]:
             self.add_blank_page(name)
 
         self.setCentralWidget(self.stack)
@@ -61,7 +64,7 @@ class MainWindow(QMainWindow):
         self.overlay.resize(self.size())
 
         # ✅ Centered label inside overlay
-        self.overlay_label = QLabel("📂 Drop files here to add them to the queue", self.overlay)
+        self.overlay_label = QLabel("📂 Trascina i file qui per aggiungerli alla coda", self.overlay)
         self.overlay_label.setAlignment(Qt.AlignCenter)
         self.overlay_label.setStyleSheet("color: #293E6b; font-size: 18px; font-weight: bold;")
         self.overlay_label.setGeometry(0, 0, self.overlay.width(), self.overlay.height())
@@ -91,7 +94,7 @@ class MainWindow(QMainWindow):
     def add_blank_page(self, name):
         widget = QWidget()
         layout = QVBoxLayout()
-        layout.addWidget(QLabel(f"{name} Page - under construction"))
+        layout.addWidget(QLabel(f"{name} Pagina - in costruzione"))
         widget.setLayout(layout)
         self.pages[name] = widget
         self.stack.addWidget(widget)
